@@ -118,3 +118,4 @@ It is not a complete list of possible solutions. To learn more about ways to imp
 - [circom -- Circuit Compiler](https://docs.circom.io/)
 - [ERC-4337: Account Abstraction Using Alt Mempool](https://eips.ethereum.org/EIPS/eip-4337)
 - [Account Abstraction Landscape by Distributed Lab](https://distributed-lab.medium.com/account-abstraction-landscape-a8ccfe7a022a)
+- [100+ Smart Account Modules](https://wallet-ecosystem.notion.site/100-Smart-Account-Modules-8873025da42c49648bfe03bf980c89d6)
