@@ -6,6 +6,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
@@ -75,7 +76,9 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
         bytes32 messageHash_,
         bytes memory signature_
     ) public view returns (bool) {
-        return ECDSA.recover(messageHash_, signature_) == owner();
+        return
+            ECDSA.recover(MessageHashUtils.toEthSignedMessageHash(messageHash_), signature_) ==
+            owner();
     }
 
     function getCurrentNonce() public view virtual returns (uint256) {
@@ -101,7 +104,7 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
 
     function _payPrefund(uint256 missingAccountFunds_) internal {
         if (missingAccountFunds_ != 0) {
-            (bool success, ) = payable(msg.sender).call{
+            (bool success, ) = payable(_msgSender()).call{
                 value: missingAccountFunds_,
                 gas: type(uint256).max
             }("");
@@ -123,20 +126,20 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
     }
 
     function _requireEntryPoint() internal view {
-        if (msg.sender != address(ENTRY_POINT)) {
-            revert NotFromEntryPoint(msg.sender);
+        if (_msgSender() != address(ENTRY_POINT)) {
+            revert NotFromEntryPoint(_msgSender());
         }
     }
 
     function _requireEntryPointOrOwner() internal view {
-        if (msg.sender != address(ENTRY_POINT) && msg.sender != owner()) {
-            revert NotFromEntryPointOrOwner(msg.sender);
+        if (_msgSender() != address(ENTRY_POINT) && _msgSender() != owner()) {
+            revert NotFromEntryPointOrOwner(_msgSender());
         }
     }
 
     function _requireThis() internal view {
-        if (msg.sender != address(this)) {
-            revert NotFromThis(msg.sender);
+        if (_msgSender() != address(this)) {
+            revert NotFromThis(_msgSender());
         }
     }
 }
