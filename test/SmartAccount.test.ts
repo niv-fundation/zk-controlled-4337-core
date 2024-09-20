@@ -6,16 +6,17 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { Reverter } from "@test-helpers";
 import { deployAA, deployEntryPoint } from "@deployment";
 
-import { EntryPointSimulations, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
+import { EntryPoint, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
 import {
   executeViaEntryPoint,
   getDefaultPackedUserOperation,
+  getEmptyPackedUserOperation,
+  getInitCode,
   getSignedPackedUserOperation,
   sendSignedPackedUserOperation,
 } from "@/test/helpers/aa-helper";
 import { getInterfaceID } from "@solarity/hardhat-habits";
 import { impersonateAccount, setBalance } from "@nomicfoundation/hardhat-network-helpers";
-import { PackedUserOperationStruct } from "@/generated-types/ethers/@account-abstraction/contracts/core/EntryPoint";
 
 describe("SmartAccount", () => {
   const reverter = new Reverter();
@@ -23,7 +24,7 @@ describe("SmartAccount", () => {
   let OWNER: SignerWithAddress;
   let SECOND: SignerWithAddress;
 
-  let entryPoint: EntryPointSimulations;
+  let entryPoint: EntryPoint;
   let accountFactory: SmartAccountFactory;
 
   let account: SmartAccount;
@@ -144,6 +145,34 @@ describe("SmartAccount", () => {
       )
         .to.be.revertedWithCustomError(entryPoint, "FailedOp")
         .withArgs(0, "AA24 signature error");
+    });
+
+    it("should deploy account and execute operation", async () => {
+      const ERC20 = await ethers.getContractFactory("ERC20Mock");
+      const token = await ERC20.deploy("Token", "TKN", 18);
+
+      const userOperation = await getEmptyPackedUserOperation();
+      const initCode = await getInitCode(accountFactory, SECOND.address);
+
+      await setBalance(initCode.predictedAddress, ethers.parseEther("20"));
+
+      userOperation.sender = initCode.predictedAddress;
+      userOperation.initCode = initCode.initCode;
+
+      userOperation.callData = SmartAccount__factory.createInterface().encodeFunctionData(
+        "execute(address,uint256,bytes)",
+        [
+          await token.getAddress(),
+          0n,
+          token.interface.encodeFunctionData("mint(address,uint256)", [initCode.predictedAddress, 1000n]),
+        ],
+      );
+
+      const signedOp = await getSignedPackedUserOperation(entryPoint, SECOND, userOperation);
+
+      await sendSignedPackedUserOperation(entryPoint, signedOp);
+
+      expect(await token.balanceOf(initCode.predictedAddress)).to.eq(1000n);
     });
 
     it("should revert if nonce is not valid", async () => {

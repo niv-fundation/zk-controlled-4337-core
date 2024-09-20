@@ -3,11 +3,11 @@ import { ethers } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { EntryPointSimulations, SmartAccount, SmartAccount__factory } from "@ethers-v6";
+import { EntryPoint, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
 import { PackedUserOperationStruct } from "@/generated-types/ethers/@account-abstraction/contracts/core/EntryPoint";
 
 export async function executeViaEntryPoint(
-  entryPoint: EntryPointSimulations,
+  entryPoint: EntryPoint,
   account: SmartAccount,
   signer: SignerWithAddress,
   destination: string,
@@ -31,15 +31,26 @@ export async function executeViaEntryPoint(
   await sendSignedPackedUserOperation(entryPoint, userOp);
 }
 
-export async function getDefaultPackedUserOperation(account: SmartAccount) {
+export async function getInitCode(accountFactory: SmartAccountFactory, ownerAddress: string) {
+  const initCode = ethers.concat([
+    await accountFactory.getAddress(),
+    accountFactory.interface.encodeFunctionData("deploySmartAccount(address)", [ownerAddress]),
+  ]);
+
+  const predictedAddress = await accountFactory.predictSmartAccountAddress(ownerAddress);
+
+  return { initCode, predictedAddress };
+}
+
+export async function getEmptyPackedUserOperation() {
   const verificationGasLimit = 16777216n;
   const callGasLimit = verificationGasLimit;
   const maxPriorityFeePerGas = 256n;
   const maxFeePerGas = maxPriorityFeePerGas;
 
-  const userOp: PackedUserOperationStruct = {
-    sender: await account.getAddress(),
-    nonce: await account.getCurrentNonce(),
+  return {
+    sender: ethers.ZeroAddress,
+    nonce: 0n,
     initCode: "0x",
     callData: "0x",
     accountGasLimits: ethers.toBeHex((BigInt(verificationGasLimit) << 128n) | BigInt(callGasLimit), 32),
@@ -48,12 +59,19 @@ export async function getDefaultPackedUserOperation(account: SmartAccount) {
     paymasterAndData: "0x",
     signature: "0x",
   };
+}
 
-  return userOp;
+export async function getDefaultPackedUserOperation(account: SmartAccount) {
+  const emptyUserOp = await getEmptyPackedUserOperation();
+
+  emptyUserOp.sender = await account.getAddress();
+  emptyUserOp.nonce = await account.getCurrentNonce();
+
+  return emptyUserOp;
 }
 
 export async function getSignedPackedUserOperation(
-  entryPoint: EntryPointSimulations,
+  entryPoint: EntryPoint,
   signer: SignerWithAddress,
   userOp: PackedUserOperationStruct,
 ) {
@@ -63,10 +81,7 @@ export async function getSignedPackedUserOperation(
   return userOp;
 }
 
-export async function sendSignedPackedUserOperation(
-  entryPoint: EntryPointSimulations,
-  userOp: PackedUserOperationStruct,
-) {
+export async function sendSignedPackedUserOperation(entryPoint: EntryPoint, userOp: PackedUserOperationStruct) {
   const [sender] = await ethers.getSigners();
   await entryPoint.handleOps([userOp], await sender.getAddress());
 }

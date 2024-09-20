@@ -1,8 +1,8 @@
 import { ethers } from "hardhat";
 
-import { EntryPointSimulations } from "@ethers-v6";
+import { EntryPoint } from "@ethers-v6";
 
-export async function deployEntryPoint(): Promise<EntryPointSimulations> {
-  const EntryPoint = await ethers.getContractFactory("EntryPointSimulations");
+export async function deployEntryPoint(): Promise<EntryPoint> {
+  const EntryPoint = await ethers.getContractFactory("EntryPoint");
   return EntryPoint.deploy();
 }

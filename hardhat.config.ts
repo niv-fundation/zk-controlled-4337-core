@@ -34,6 +34,11 @@ const config: HardhatUserConfig = {
       url: "http://127.0.0.1:8545",
       gasMultiplier: 1.2,
     },
+    sepolia: {
+      url: `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`,
+      accounts: privateKey(),
+      gasMultiplier: 1.2,
+    },
   },
   solidity: {
     version: "0.8.26",
@@ -46,7 +51,9 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: {},
+    apiKey: {
+      sepolia: `${process.env.ETHERSCAN_KEY}`,
+    },
   },
   migrate: {
     pathToMigrations: "./deploy/",

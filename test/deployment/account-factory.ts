@@ -1,8 +1,8 @@
 import { ethers } from "hardhat";
 
-import { EntryPointSimulations, SmartAccountFactory } from "@ethers-v6";
+import { EntryPoint, SmartAccountFactory } from "@ethers-v6";
 
-export async function deployAA(entryPoint: EntryPointSimulations) {
+export async function deployAA(entryPoint: EntryPoint) {
   const SmartAccountFactory = await ethers.getContractFactory("SmartAccountFactory");
   let accountFactory: SmartAccountFactory = await SmartAccountFactory.deploy();
 

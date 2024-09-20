@@ -31,7 +31,7 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
         _smartAccountImplementation = smartAccountImplementation_;
     }
 
-    function deploySmartAccount(address owner_) external {
+    function deploySmartAccount(address owner_) external returns (address) {
         SmartAccount account_ = SmartAccount(
             _deploy2(_smartAccountImplementation, bytes32(uint256(uint160(owner_))))
         );
@@ -41,6 +41,8 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
         smartAccounts[owner_] = address(account_);
 
         emit SmartAccountDeployed(address(account_));
+
+        return address(account_);
     }
 
     /**

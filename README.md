@@ -119,3 +119,18 @@ It is not a complete list of possible solutions. To learn more about ways to imp
 - [ERC-4337: Account Abstraction Using Alt Mempool](https://eips.ethereum.org/EIPS/eip-4337)
 - [Account Abstraction Landscape by Distributed Lab](https://distributed-lab.medium.com/account-abstraction-landscape-a8ccfe7a022a)
 - [100+ Smart Account Modules](https://wallet-ecosystem.notion.site/100-Smart-Account-Modules-8873025da42c49648bfe03bf980c89d6)
+
+# Deployments 
+
+| Contract Name               | Network | Address                                      |
+|-----------------------------|---------|----------------------------------------------|
+| Some Token                  | Sepolia | 0xB7e34aEB1ba4E2C270d27e980Ba47BaABb34DD09   |
+| EntryPoint v0.7.0           | Sepolia | 0xC1ECEd7578cDcED435717BDF3a667D3cf418bE0C   |
+| Smart Account Factory       | Sepolia | 0x9aEA6E9504cCA01B267dAc45e0cC2883F8c0ae31   |
+
+# Showcases
+
+| Action                       | Network | Transaction                                                                                                                             |
+|------------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| Deploy Account + Mint tokens | Sepolia | [Handle Ops of Deployment and Mint](https://sepolia.etherscan.io/tx/0x0931a898e8184d731f26ad03ae78ba9d55d10647e0aaee912b303632f716c668) |
+
