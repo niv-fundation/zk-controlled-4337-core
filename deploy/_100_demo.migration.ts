@@ -43,7 +43,7 @@ export = async (deployer: Deployer) => {
     ],
   );
 
-  const signedOp = await getSignedPackedUserOperation(entryPoint, signer as any, userOperation);
-
-  await sendSignedPackedUserOperation(entryPoint, signedOp);
+  // const signedOp = await getSignedPackedUserOperation(entryPoint, signer as any, userOperation);
+  //
+  // await sendSignedPackedUserOperation(entryPoint, signedOp);
 };

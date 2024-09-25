@@ -15,7 +15,7 @@ import {SmartAccount} from "./SmartAccount.sol";
 contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
     using TypeCaster for *;
 
-    mapping(address => address) public smartAccounts;
+    mapping(bytes32 => address) public smartAccounts;
 
     address private _smartAccountImplementation;
 
@@ -31,14 +31,12 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
         _smartAccountImplementation = smartAccountImplementation_;
     }
 
-    function deploySmartAccount(address owner_) external returns (address) {
-        SmartAccount account_ = SmartAccount(
-            _deploy2(_smartAccountImplementation, bytes32(uint256(uint160(owner_))))
-        );
+    function deploySmartAccount(bytes32 nullifier_) external returns (address) {
+        SmartAccount account_ = SmartAccount(_deploy2(_smartAccountImplementation, nullifier_));
 
-        account_.__SmartAccount_init(owner_);
+        account_.__SmartAccount_init(nullifier_);
 
-        smartAccounts[owner_] = address(account_);
+        smartAccounts[nullifier_] = address(account_);
 
         emit SmartAccountDeployed(address(account_));
 
@@ -63,8 +61,8 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
     /**
      * @notice Predicts the address of the Smart Account contract.
      */
-    function predictSmartAccountAddress(address owner_) external view returns (address) {
-        return _predictAddress(_smartAccountImplementation, bytes32(uint256(uint160(owner_))));
+    function predictSmartAccountAddress(bytes32 nullifier_) external view returns (address) {
+        return _predictAddress(_smartAccountImplementation, nullifier_);
     }
 
     /**
@@ -77,8 +75,8 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
     /**
      * @notice Returns the address of the Smart Account contract.
      */
-    function getSmartAccount(address owner_) external view returns (address) {
-        return smartAccounts[owner_];
+    function getSmartAccount(bytes32 nullifier_) external view returns (address) {
+        return smartAccounts[nullifier_];
     }
 
     // solhint-disable-next-line no-empty-blocks

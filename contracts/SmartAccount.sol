@@ -2,21 +2,35 @@
 pragma solidity ^0.8.20;
 
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 import {IAccount} from "@account-abstraction/contracts/interfaces/IAccount.sol";
 import {IEntryPoint} from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "@account-abstraction/contracts/core/Helpers.sol";
 
-contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, OwnableUpgradeable {
-    IEntryPoint private immutable ENTRY_POINT;
+import {TypeCaster} from "@solarity/solidity-lib/libs/utils/TypeCaster.sol";
+import {VerifierHelper} from "@solarity/solidity-lib/libs/zkp/snarkjs/VerifierHelper.sol";
+
+contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder, Nonces {
+    using TypeCaster for *;
+    using VerifierHelper for address;
+
+    struct IdentityProof {
+        VerifierHelper.ProofPoints identityProof;
+    }
+
+    IEntryPoint public immutable ENTRY_POINT;
+
+    address public immutable IDENTITY_AUTH_VERIFIER;
+
+    bytes32 public nullifier;
+
+    mapping(address => uint48) public sessionAccounts;
 
     modifier onlyThis() {
         _requireThis();
@@ -33,6 +47,9 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
         _;
     }
 
+    event SessionAccountSet(address indexed account, uint256 timestamp);
+
+    error InvalidProof();
     error CallFailed(bytes result);
     error NotFromThis(address sender);
     error InvalidNonce(uint256 nonce);
@@ -41,14 +58,16 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
 
     receive() external payable {}
 
-    constructor(address entryPoint_) {
+    constructor(address entryPoint_, address identityAuthVerifier_) {
         ENTRY_POINT = IEntryPoint(entryPoint_);
+
+        IDENTITY_AUTH_VERIFIER = identityAuthVerifier_;
 
         _disableInitializers();
     }
 
-    function __SmartAccount_init(address owner_) external initializer {
-        __Ownable_init(owner_);
+    function __SmartAccount_init(bytes32 nullifier_) external initializer {
+        nullifier = nullifier_;
     }
 
     function execute(
@@ -72,20 +91,39 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
         _payPrefund(missingAccountFunds);
     }
 
-    function validateSignature(
-        bytes32 messageHash_,
-        bytes memory signature_
-    ) public view returns (bool) {
-        return
-            ECDSA.recover(MessageHashUtils.toEthSignedMessageHash(messageHash_), signature_) ==
-            owner();
+    function setSessionAccount(address candidate_, bytes memory signature_) external {
+        IdentityProof memory identityProof_ = decodeIdentityProof(signature_);
+
+        bool proofResult_ = IDENTITY_AUTH_VERIFIER.verifyProofSafe(
+            [uint256(nullifier), uint256(uint160(candidate_))].asDynamic(),
+            identityProof_.identityProof,
+            2
+        );
+
+        if (!proofResult_) {
+            revert InvalidProof();
+        }
+
+        sessionAccounts[candidate_] = uint48(block.timestamp);
+
+        emit SessionAccountSet(candidate_, block.timestamp);
     }
 
-    function getCurrentNonce() public view virtual returns (uint256) {
+    function encodeIdentityProof(
+        IdentityProof memory proof_
+    ) external pure returns (bytes memory) {
+        return abi.encode(proof_);
+    }
+
+    function decodeIdentityProof(bytes memory data_) public pure returns (IdentityProof memory) {
+        return abi.decode(data_, (IdentityProof));
+    }
+
+    function getCurrentNonce() public view returns (uint256) {
         return nonces(address(this));
     }
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return interfaceId == type(IAccount).interfaceId || super.supportsInterface(interfaceId);
     }
 
@@ -93,7 +131,13 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
         PackedUserOperation calldata userOp,
         bytes32 userOpHash
     ) internal view returns (uint256 validationData) {
-        bool proofResult_ = validateSignature(userOpHash, userOp.signature);
+        IdentityProof memory identityProof_ = decodeIdentityProof(userOp.signature);
+
+        bool proofResult_ = IDENTITY_AUTH_VERIFIER.verifyProofSafe(
+            [uint256(nullifier), uint256(userOpHash)].asDynamic(),
+            identityProof_.identityProof,
+            2
+        );
 
         if (!proofResult_) {
             return SIG_VALIDATION_FAILED;
@@ -104,7 +148,7 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
 
     function _payPrefund(uint256 missingAccountFunds_) internal {
         if (missingAccountFunds_ != 0) {
-            (bool success, ) = payable(_msgSender()).call{
+            (bool success, ) = payable(msg.sender).call{
                 value: missingAccountFunds_,
                 gas: type(uint256).max
             }("");
@@ -126,20 +170,20 @@ contract SmartAccount is IAccount, UUPSUpgradeable, ERC1155Holder, Nonces, Ownab
     }
 
     function _requireEntryPoint() internal view {
-        if (_msgSender() != address(ENTRY_POINT)) {
-            revert NotFromEntryPoint(_msgSender());
+        if (msg.sender != address(ENTRY_POINT)) {
+            revert NotFromEntryPoint(msg.sender);
         }
     }
 
     function _requireEntryPointOrOwner() internal view {
-        if (_msgSender() != address(ENTRY_POINT) && _msgSender() != owner()) {
-            revert NotFromEntryPointOrOwner(_msgSender());
+        if (msg.sender != address(ENTRY_POINT) && sessionAccounts[msg.sender] == 0) {
+            revert NotFromEntryPointOrOwner(msg.sender);
         }
     }
 
     function _requireThis() internal view {
-        if (_msgSender() != address(this)) {
-            revert NotFromThis(_msgSender());
+        if (msg.sender != address(this)) {
+            revert NotFromThis(msg.sender);
         }
     }
 }

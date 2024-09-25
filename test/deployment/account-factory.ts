@@ -13,7 +13,10 @@ export async function deployAA(entryPoint: EntryPoint) {
 
   const SmartAccount = await ethers.getContractFactory("SmartAccount");
 
-  const account = await SmartAccount.deploy(await entryPoint.getAddress());
+  const IdentityAuthVerifier = await ethers.getContractFactory("IdentityAuthVerifier");
+  const identityAuthVerifier = await IdentityAuthVerifier.deploy();
+
+  const account = await SmartAccount.deploy(await entryPoint.getAddress(), await identityAuthVerifier.getAddress());
 
   await accountFactory.__SmartAccountFactory_init(await account.getAddress());
 
