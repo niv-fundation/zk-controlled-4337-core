@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, zkit } from "hardhat";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -12,14 +12,19 @@ import {
   getDefaultPackedUserOperation,
   getEmptyPackedUserOperation,
   getInitCode,
+  getSignature,
   getSignedPackedUserOperation,
   sendSignedPackedUserOperation,
 } from "@/test/helpers/aa-helper";
 import { getInterfaceID } from "@solarity/hardhat-habits";
 import { impersonateAccount, setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { buildNullifier, poseidonHash } from "@scripts";
+import { IdentityAuth } from "@/generated-types/zkit";
 
 describe("SmartAccount", () => {
   const reverter = new Reverter();
+
+  const EVENT_ID = 5n;
 
   let OWNER: SignerWithAddress;
   let SECOND: SignerWithAddress;
@@ -29,14 +34,30 @@ describe("SmartAccount", () => {
 
   let account: SmartAccount;
 
+  let identityAuth: IdentityAuth;
+
+  let privateKey: bigint;
+  let secondPrivateKey: bigint;
+
+  let accountNullifier: string;
+  let secondNullifier: string;
+
   before(async () => {
+    identityAuth = await zkit.getCircuit("IdentityAuth");
+
     [OWNER, SECOND] = await ethers.getSigners();
 
     entryPoint = await deployEntryPoint();
     accountFactory = await deployAA(entryPoint);
 
-    await accountFactory.deploySmartAccount(OWNER.address);
-    account = await ethers.getContractAt("SmartAccount", await accountFactory.getSmartAccount(OWNER.address));
+    privateKey = BigInt(poseidonHash(ethers.hexlify(ethers.randomBytes(32)))) >> 3n;
+    secondPrivateKey = BigInt(poseidonHash(ethers.hexlify(ethers.randomBytes(32)))) >> 3n;
+
+    accountNullifier = buildNullifier(privateKey, EVENT_ID);
+    secondNullifier = buildNullifier(secondPrivateKey, EVENT_ID);
+
+    await accountFactory.deploySmartAccount(accountNullifier);
+    account = await ethers.getContractAt("SmartAccount", await accountFactory.getSmartAccount(accountNullifier));
 
     await setBalance(await account.getAddress(), ethers.parseEther("20"));
 
@@ -47,20 +68,20 @@ describe("SmartAccount", () => {
 
   describe("#Smart Account Factory", () => {
     it("should deploy a smart account and emit deployment event", async () => {
-      const expectedAddress = await accountFactory.predictSmartAccountAddress(SECOND.address);
+      const expectedAddress = await accountFactory.predictSmartAccountAddress(secondNullifier);
 
-      await expect(accountFactory.deploySmartAccount(SECOND.address))
+      await expect(accountFactory.deploySmartAccount(secondNullifier))
         .to.emit(accountFactory, "SmartAccountDeployed")
         .withArgs(expectedAddress);
 
-      expect(await accountFactory.getSmartAccount(SECOND.address)).to.eq(expectedAddress);
+      expect(await accountFactory.getSmartAccount(secondNullifier)).to.eq(expectedAddress);
     });
 
     it("should set new Smart Account implementation only by owner", async () => {
       const currentImplementation = await accountFactory.getSmartAccountImplementation();
 
       const SmartAccount = await ethers.getContractFactory("SmartAccount");
-      const newImplementation = await SmartAccount.deploy(ethers.ZeroAddress);
+      const newImplementation = await SmartAccount.deploy(ethers.ZeroAddress, ethers.ZeroAddress);
 
       await expect(accountFactory.connect(SECOND).setSmartAccountImplementation(await newImplementation.getAddress()))
         .to.be.revertedWithCustomError(accountFactory, "OwnableUnauthorizedAccount")
@@ -101,21 +122,35 @@ describe("SmartAccount", () => {
       await executeViaEntryPoint(
         entryPoint,
         account,
-        OWNER,
+        privateKey,
+        EVENT_ID,
         await accountFactory.getAddress(),
-        accountFactory.interface.encodeFunctionData("deploySmartAccount", [SECOND.address]),
+        accountFactory.interface.encodeFunctionData("deploySmartAccount", [secondNullifier]),
         0n,
       );
+
+      const signature = await getSignature(account, privateKey, EVENT_ID, OWNER.address);
+
+      await account.setSessionAccount(OWNER.address, signature);
 
       await expect(
         account.execute(
           await accountFactory.getAddress(),
           0n,
-          accountFactory.interface.encodeFunctionData("deploySmartAccount", [SECOND.address]),
+          accountFactory.interface.encodeFunctionData("deploySmartAccount", [secondNullifier]),
         ),
       )
         .to.be.revertedWithCustomError(account, "CallFailed")
         .withArgs("0x");
+    });
+
+    it("should revert if trying to set invalid session account", async () => {
+      const signature = await getSignature(account, privateKey, EVENT_ID, OWNER.address);
+
+      await expect(account.setSessionAccount(SECOND.address, signature)).to.be.revertedWithCustomError(
+        account,
+        "InvalidProof",
+      );
     });
 
     it("should revert if trying to call account not from owner or entry point", async () => {
@@ -125,7 +160,7 @@ describe("SmartAccount", () => {
           .execute(
             await accountFactory.getAddress(),
             0n,
-            accountFactory.interface.encodeFunctionData("deploySmartAccount", [SECOND.address]),
+            accountFactory.interface.encodeFunctionData("deploySmartAccount", [secondNullifier]),
           ),
       )
         .to.be.revertedWithCustomError(account, "NotFromEntryPointOrOwner")
@@ -137,9 +172,10 @@ describe("SmartAccount", () => {
         executeViaEntryPoint(
           entryPoint,
           account,
-          SECOND,
+          secondPrivateKey,
+          EVENT_ID,
           await accountFactory.getAddress(),
-          accountFactory.interface.encodeFunctionData("deploySmartAccount", [SECOND.address]),
+          accountFactory.interface.encodeFunctionData("deploySmartAccount", [secondNullifier]),
           0n,
         ),
       )
@@ -152,7 +188,7 @@ describe("SmartAccount", () => {
       const token = await ERC20.deploy("Token", "TKN", 18);
 
       const userOperation = await getEmptyPackedUserOperation();
-      const initCode = await getInitCode(accountFactory, SECOND.address);
+      const initCode = await getInitCode(accountFactory, secondNullifier);
 
       await setBalance(initCode.predictedAddress, ethers.parseEther("20"));
 
@@ -168,7 +204,13 @@ describe("SmartAccount", () => {
         ],
       );
 
-      const signedOp = await getSignedPackedUserOperation(entryPoint, SECOND, userOperation);
+      const signedOp = await getSignedPackedUserOperation(
+        entryPoint,
+        account,
+        secondPrivateKey,
+        EVENT_ID,
+        userOperation,
+      );
 
       await sendSignedPackedUserOperation(entryPoint, signedOp);
 
@@ -178,7 +220,7 @@ describe("SmartAccount", () => {
     it("should revert if nonce is not valid", async () => {
       const nonSignedOp = await getDefaultPackedUserOperation(account);
       nonSignedOp.nonce = ethers.MaxUint256 - 2n;
-      const signedOp = await getSignedPackedUserOperation(entryPoint, OWNER, nonSignedOp);
+      const signedOp = await getSignedPackedUserOperation(entryPoint, account, privateKey, EVENT_ID, nonSignedOp);
 
       await expect(sendSignedPackedUserOperation(entryPoint, signedOp))
         .to.be.revertedWithCustomError(entryPoint, "FailedOpWithRevert")
@@ -199,7 +241,7 @@ describe("SmartAccount", () => {
       await setBalance(await entryPoint.getAddress(), ethers.parseEther("20"));
 
       const nonSignedOp = await getDefaultPackedUserOperation(account);
-      const signedOp = await getSignedPackedUserOperation(entryPoint, OWNER, nonSignedOp);
+      const signedOp = await getSignedPackedUserOperation(entryPoint, account, privateKey, EVENT_ID, nonSignedOp);
       const hashOp = await entryPoint.getUserOpHash(signedOp);
 
       expect(await account.connect(entryPointAsSigner).validateUserOp.staticCall(signedOp, hashOp, 0n)).to.be.eq(0n);
@@ -216,7 +258,9 @@ describe("SmartAccount", () => {
       const currentImplementation = await account.implementation();
 
       const SmartAccount = await ethers.getContractFactory("SmartAccount");
-      const newImplementation = await SmartAccount.deploy(ethers.ZeroAddress);
+      const newImplementation = await SmartAccount.deploy(ethers.ZeroAddress, ethers.ZeroAddress);
+
+      await account.setSessionAccount(OWNER.address, await getSignature(account, privateKey, EVENT_ID, OWNER.address));
 
       await expect(account.connect(SECOND).upgradeToAndCall(await newImplementation.getAddress(), "0x"))
         .to.be.revertedWithCustomError(account, "NotFromThis")
@@ -233,7 +277,7 @@ describe("SmartAccount", () => {
     });
 
     it("should revert if trying to initialize factory twice", async () => {
-      await expect(account.__SmartAccount_init(ethers.ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(account.__SmartAccount_init(ethers.ZeroHash)).to.be.revertedWithCustomError(
         account,
         "InvalidInitialization",
       );

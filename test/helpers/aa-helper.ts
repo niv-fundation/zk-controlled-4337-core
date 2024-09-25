@@ -1,15 +1,44 @@
-import { ethers } from "hardhat";
+import { ethers, zkit } from "hardhat";
 
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+
+import { signRawPoseidon } from "@scripts";
 
 import { EntryPoint, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
 import { PackedUserOperationStruct } from "@/generated-types/ethers/@account-abstraction/contracts/core/EntryPoint";
 
+export async function getSignature(account: SmartAccount, signerPk: bigint, eventId: bigint, messageHash: string) {
+  const signature = signRawPoseidon(signerPk, messageHash);
+
+  const identityAuth = await zkit.getCircuit("IdentityAuth");
+  const proofSessionKeyAuth = await identityAuth.generateProof({
+    messageHash: BigInt(messageHash),
+    sk_i: signerPk,
+    eventID: BigInt(eventId),
+    signatureR8x: signature.R8[0],
+    signatureR8y: signature.R8[1],
+    signatureS: signature.S,
+  });
+
+  const identityProofStruct: SmartAccount.IdentityProofStruct = {
+    identityProof: {
+      a: [proofSessionKeyAuth.proof.pi_a[0], proofSessionKeyAuth.proof.pi_a[1]],
+      b: [
+        [proofSessionKeyAuth.proof.pi_b[0][1], proofSessionKeyAuth.proof.pi_b[0][0]],
+        [proofSessionKeyAuth.proof.pi_b[1][1], proofSessionKeyAuth.proof.pi_b[1][0]],
+      ],
+      c: [proofSessionKeyAuth.proof.pi_c[0], proofSessionKeyAuth.proof.pi_c[1]],
+    },
+  };
+
+  return await account.encodeIdentityProof(identityProofStruct);
+}
+
 export async function executeViaEntryPoint(
   entryPoint: EntryPoint,
   account: SmartAccount,
-  signer: SignerWithAddress,
+  signerPk: bigint,
+  eventId: bigint,
   destination: string,
   data: string,
   value: bigint,
@@ -26,18 +55,18 @@ export async function executeViaEntryPoint(
   ]);
 
   const userOpHash = await entryPoint.getUserOpHash(userOp);
-  userOp.signature = await ethers.provider.send("eth_sign", [signer.address.toLowerCase(), userOpHash]);
+  userOp.signature = await getSignature(account, signerPk, eventId, userOpHash);
 
   await sendSignedPackedUserOperation(entryPoint, userOp);
 }
 
-export async function getInitCode(accountFactory: SmartAccountFactory, ownerAddress: string) {
+export async function getInitCode(accountFactory: SmartAccountFactory, nullifier: string) {
   const initCode = ethers.concat([
     await accountFactory.getAddress(),
-    accountFactory.interface.encodeFunctionData("deploySmartAccount(address)", [ownerAddress]),
+    accountFactory.interface.encodeFunctionData("deploySmartAccount(bytes32)", [nullifier]),
   ]);
 
-  const predictedAddress = await accountFactory.predictSmartAccountAddress(ownerAddress);
+  const predictedAddress = await accountFactory.predictSmartAccountAddress(nullifier);
 
   return { initCode, predictedAddress };
 }
@@ -72,11 +101,13 @@ export async function getDefaultPackedUserOperation(account: SmartAccount) {
 
 export async function getSignedPackedUserOperation(
   entryPoint: EntryPoint,
-  signer: SignerWithAddress,
+  account: SmartAccount,
+  signerPk: bigint,
+  eventId: bigint,
   userOp: PackedUserOperationStruct,
 ) {
   const userOpHash = await entryPoint.getUserOpHash(userOp);
-  userOp.signature = await ethers.provider.send("eth_sign", [signer.address.toLowerCase(), userOpHash]);
+  userOp.signature = await getSignature(account, signerPk, eventId, userOpHash);
 
   return userOp;
 }

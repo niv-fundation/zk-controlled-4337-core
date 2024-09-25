@@ -6,6 +6,7 @@
   "description": "The Smart Account build by 4337 standard which controlled with ZKPs.",
   "scripts": {
     "prepare": "husky",
+    "prepare-circuits": "npx hardhat zkit verifiers && npx hardhat zkit setup",
     "compile": "npx hardhat compile",
     "coverage": "npx hardhat coverage --solcoverjs ./.solcover.ts",
     "clean": "npx hardhat clean",
