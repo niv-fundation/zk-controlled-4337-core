@@ -5,6 +5,8 @@ import { Scalar } from "ffjavascript";
 
 import { babyJub, Poseidon } from "@iden3/js-crypto";
 
+export const EVENT_ID = 1n;
+
 export function poseidonHash(data: string): string {
   data = ethers.hexlify(data);
 
