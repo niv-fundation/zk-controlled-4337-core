@@ -7,7 +7,7 @@ import {
   SmartAccountFactory__factory,
 } from "@ethers-v6";
 
-const ENTRY_POINT = "0xC1ECEd7578cDcED435717BDF3a667D3cf418bE0C";
+const ENTRY_POINT = "0x64B38172fF8D960305a4B9cD372415fEb26aF676";
 
 export = async (deployer: Deployer) => {
   let accountFactory = await deployer.deploy(SmartAccountFactory__factory);

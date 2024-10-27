@@ -7,7 +7,7 @@ import { Reverter } from "@test-helpers";
 
 import { IdentityAuth } from "@/generated-types/zkit";
 
-describe.only("IdentityAuth", () => {
+describe("IdentityAuth", () => {
   const reverter = new Reverter();
 
   let identityAuth: IdentityAuth;

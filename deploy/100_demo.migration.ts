@@ -14,22 +14,23 @@ import {
   getSignedPackedUserOperation,
   sendSignedPackedUserOperation,
 } from "@/test/helpers/aa-helper";
+import { buildNullifier, EVENT_ID } from "@scripts";
 
-const ENTRY_POINT = "0xC1ECEd7578cDcED435717BDF3a667D3cf418bE0C";
-const SOME_TOKEN = "0xB7e34aEB1ba4E2C270d27e980Ba47BaABb34DD09";
-const ACCOUNT_FACTORY = "0x9aEA6E9504cCA01B267dAc45e0cC2883F8c0ae31";
+const ENTRY_POINT = "0x820692eaD6ba469d76c6c443FA97fC8B5bef309A";
+const SOME_TOKEN = "0x07ECE004fF33ce444f82F8d538A5687849Df67AC";
+const ACCOUNT_FACTORY = "0x76C9b5c8Bc736e58F5b54BA721571c77059CAa68";
 
 export = async (deployer: Deployer) => {
   const token = await deployer.deployed(ERC20Mock__factory, SOME_TOKEN);
   const entryPoint = await deployer.deployed(EntryPoint__factory, ENTRY_POINT);
   const accountFactory = await deployer.deployed(SmartAccountFactory__factory, ACCOUNT_FACTORY);
 
-  const signer = await deployer.getSigner();
+  const privateKey = BigInt("0x29176100eaa962bdc1fe6c654d6a3c130e96a4d1168b33848b897dc502820133");
 
   const userOperation = await getEmptyPackedUserOperation();
-  const initCode = await getInitCode(accountFactory, await signer.getAddress());
+  const initCode = await getInitCode(accountFactory, buildNullifier(privateKey, EVENT_ID));
 
-  await deployer.sendNative(initCode.predictedAddress, ethers.parseEther("0.1"));
+  await deployer.sendNative(initCode.predictedAddress, ethers.parseEther("1"));
 
   userOperation.sender = initCode.predictedAddress;
   userOperation.initCode = initCode.initCode;
@@ -43,7 +44,7 @@ export = async (deployer: Deployer) => {
     ],
   );
 
-  // const signedOp = await getSignedPackedUserOperation(entryPoint, signer as any, userOperation);
-  //
-  // await sendSignedPackedUserOperation(entryPoint, signedOp);
+  const signedOp = await getSignedPackedUserOperation(entryPoint, privateKey, EVENT_ID, userOperation);
+
+  await sendSignedPackedUserOperation(entryPoint, signedOp);
 };

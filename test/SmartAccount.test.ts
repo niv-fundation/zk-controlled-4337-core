@@ -129,7 +129,7 @@ describe("SmartAccount", () => {
         0n,
       );
 
-      const signature = await getSignature(account, privateKey, EVENT_ID, OWNER.address);
+      const signature = await getSignature(privateKey, EVENT_ID, OWNER.address);
 
       await account.setSessionAccount(OWNER.address, signature);
 
@@ -145,7 +145,7 @@ describe("SmartAccount", () => {
     });
 
     it("should revert if trying to set invalid session account", async () => {
-      const signature = await getSignature(account, privateKey, EVENT_ID, OWNER.address);
+      const signature = await getSignature(privateKey, EVENT_ID, OWNER.address);
 
       await expect(account.setSessionAccount(SECOND.address, signature)).to.be.revertedWithCustomError(
         account,
@@ -204,23 +204,20 @@ describe("SmartAccount", () => {
         ],
       );
 
-      const signedOp = await getSignedPackedUserOperation(
-        entryPoint,
-        account,
-        secondPrivateKey,
-        EVENT_ID,
-        userOperation,
-      );
+      const signedOp = await getSignedPackedUserOperation(entryPoint, secondPrivateKey, EVENT_ID, userOperation);
 
       await sendSignedPackedUserOperation(entryPoint, signedOp);
 
+      const account = await ethers.getContractAt("SmartAccount", initCode.predictedAddress);
+
       expect(await token.balanceOf(initCode.predictedAddress)).to.eq(1000n);
+      expect((await account.getTransactionHistory(0, 10)).length).to.eq(1);
     });
 
     it("should revert if nonce is not valid", async () => {
       const nonSignedOp = await getDefaultPackedUserOperation(account);
       nonSignedOp.nonce = ethers.MaxUint256 - 2n;
-      const signedOp = await getSignedPackedUserOperation(entryPoint, account, privateKey, EVENT_ID, nonSignedOp);
+      const signedOp = await getSignedPackedUserOperation(entryPoint, privateKey, EVENT_ID, nonSignedOp);
 
       await expect(sendSignedPackedUserOperation(entryPoint, signedOp))
         .to.be.revertedWithCustomError(entryPoint, "FailedOpWithRevert")
@@ -241,7 +238,7 @@ describe("SmartAccount", () => {
       await setBalance(await entryPoint.getAddress(), ethers.parseEther("20"));
 
       const nonSignedOp = await getDefaultPackedUserOperation(account);
-      const signedOp = await getSignedPackedUserOperation(entryPoint, account, privateKey, EVENT_ID, nonSignedOp);
+      const signedOp = await getSignedPackedUserOperation(entryPoint, privateKey, EVENT_ID, nonSignedOp);
       const hashOp = await entryPoint.getUserOpHash(signedOp);
 
       expect(await account.connect(entryPointAsSigner).validateUserOp.staticCall(signedOp, hashOp, 0n)).to.be.eq(0n);
@@ -260,7 +257,7 @@ describe("SmartAccount", () => {
       const SmartAccount = await ethers.getContractFactory("SmartAccount");
       const newImplementation = await SmartAccount.deploy(ethers.ZeroAddress, ethers.ZeroAddress);
 
-      await account.setSessionAccount(OWNER.address, await getSignature(account, privateKey, EVENT_ID, OWNER.address));
+      await account.setSessionAccount(OWNER.address, await getSignature(privateKey, EVENT_ID, OWNER.address));
 
       await expect(account.connect(SECOND).upgradeToAndCall(await newImplementation.getAddress(), "0x"))
         .to.be.revertedWithCustomError(account, "NotFromThis")

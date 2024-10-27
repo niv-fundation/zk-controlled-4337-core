@@ -2,12 +2,12 @@ import { ethers, zkit } from "hardhat";
 
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { signRawPoseidon } from "@scripts";
+import { encodeIdentityProof, signRawPoseidon } from "@scripts";
 
 import { EntryPoint, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
 import { PackedUserOperationStruct } from "@/generated-types/ethers/@account-abstraction/contracts/core/EntryPoint";
 
-export async function getSignature(account: SmartAccount, signerPk: bigint, eventId: bigint, messageHash: string) {
+export async function getSignature(signerPk: bigint, eventId: bigint, messageHash: string) {
   const signature = signRawPoseidon(signerPk, messageHash);
 
   const identityAuth = await zkit.getCircuit("IdentityAuth");
@@ -31,7 +31,7 @@ export async function getSignature(account: SmartAccount, signerPk: bigint, even
     },
   };
 
-  return await account.encodeIdentityProof(identityProofStruct);
+  return encodeIdentityProof(identityProofStruct);
 }
 
 export async function executeViaEntryPoint(
@@ -55,7 +55,7 @@ export async function executeViaEntryPoint(
   ]);
 
   const userOpHash = await entryPoint.getUserOpHash(userOp);
-  userOp.signature = await getSignature(account, signerPk, eventId, userOpHash);
+  userOp.signature = await getSignature(signerPk, eventId, userOpHash);
 
   await sendSignedPackedUserOperation(entryPoint, userOp);
 }
@@ -72,7 +72,7 @@ export async function getInitCode(accountFactory: SmartAccountFactory, nullifier
 }
 
 export async function getEmptyPackedUserOperation() {
-  const verificationGasLimit = 16777216n;
+  const verificationGasLimit = 2777216n;
   const callGasLimit = verificationGasLimit;
   const maxPriorityFeePerGas = 256n;
   const maxFeePerGas = maxPriorityFeePerGas;
@@ -101,18 +101,17 @@ export async function getDefaultPackedUserOperation(account: SmartAccount) {
 
 export async function getSignedPackedUserOperation(
   entryPoint: EntryPoint,
-  account: SmartAccount,
   signerPk: bigint,
   eventId: bigint,
   userOp: PackedUserOperationStruct,
 ) {
   const userOpHash = await entryPoint.getUserOpHash(userOp);
-  userOp.signature = await getSignature(account, signerPk, eventId, userOpHash);
+  userOp.signature = await getSignature(signerPk, eventId, userOpHash);
 
   return userOp;
 }
 
 export async function sendSignedPackedUserOperation(entryPoint: EntryPoint, userOp: PackedUserOperationStruct) {
   const [sender] = await ethers.getSigners();
-  await entryPoint.handleOps([userOp], await sender.getAddress());
+  await entryPoint.handleOps([userOp], await sender.getAddress(), { gasLimit: 10000000 });
 }

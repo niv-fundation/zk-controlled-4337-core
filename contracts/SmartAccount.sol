@@ -58,6 +58,7 @@ contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder
     }
 
     event SessionAccountSet(address indexed account, uint256 timestamp);
+    event Executed(address indexed destination, uint256 value, bytes data);
 
     error InvalidProof();
     error CallFailed(bytes result);
@@ -89,6 +90,10 @@ contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder
         if (!success) {
             revert CallFailed(result);
         }
+
+        history.push(TransactionLog(destination_, block.timestamp, value_, functionData_));
+
+        emit Executed(destination_, value_, functionData_);
     }
 
     function validateUserOp(
@@ -140,7 +145,7 @@ contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder
     function getTransactionHistory(
         uint256 offset_,
         uint256 limit_
-    ) internal view returns (TransactionLog[] memory list_) {
+    ) external view returns (TransactionLog[] memory list_) {
         uint256 to_ = Paginator.getTo(history.length, offset_, limit_);
 
         list_ = new TransactionLog[](to_ - offset_);
