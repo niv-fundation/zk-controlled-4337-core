@@ -13,6 +13,7 @@ import {IEntryPoint} from "@account-abstraction/contracts/interfaces/IEntryPoint
 import {PackedUserOperation} from "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "@account-abstraction/contracts/core/Helpers.sol";
 
+import {Paginator} from "@solarity/solidity-lib/libs/arrays/Paginator.sol";
 import {TypeCaster} from "@solarity/solidity-lib/libs/utils/TypeCaster.sol";
 import {VerifierHelper} from "@solarity/solidity-lib/libs/zkp/snarkjs/VerifierHelper.sol";
 
@@ -24,11 +25,20 @@ contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder
         VerifierHelper.ProofPoints identityProof;
     }
 
+    struct TransactionLog {
+        address destination;
+        uint256 timestamp;
+        uint256 value;
+        bytes data;
+    }
+
     IEntryPoint public immutable ENTRY_POINT;
 
     address public immutable IDENTITY_AUTH_VERIFIER;
 
     bytes32 public nullifier;
+
+    TransactionLog[] public history;
 
     mapping(address => uint48) public sessionAccounts;
 
@@ -125,6 +135,19 @@ contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return interfaceId == type(IAccount).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    function getTransactionHistory(
+        uint256 offset_,
+        uint256 limit_
+    ) internal view returns (TransactionLog[] memory list_) {
+        uint256 to_ = Paginator.getTo(history.length, offset_, limit_);
+
+        list_ = new TransactionLog[](to_ - offset_);
+
+        for (uint256 i = offset_; i < to_; i++) {
+            list_[i - offset_] = history[i];
+        }
     }
 
     function _validateSignature(
