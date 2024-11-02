@@ -17,7 +17,6 @@ import {
 import { buildNullifier, EVENT_ID } from "@scripts";
 
 export = async (deployer: Deployer) => {
-  const token = await deployer.deployed(ERC20Mock__factory);
   const entryPoint = await deployer.deployed(EntryPoint__factory);
   const accountFactory = await deployer.deployed(SmartAccountFactory__factory, "SmartAccountFactoryProxy");
 
