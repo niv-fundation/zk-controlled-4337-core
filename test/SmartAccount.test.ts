@@ -50,8 +50,8 @@ describe("SmartAccount", () => {
     entryPoint = await deployEntryPoint();
     accountFactory = await deployAA(entryPoint);
 
-    privateKey = BigInt(poseidonHash(ethers.hexlify(ethers.randomBytes(32)))) >> 3n;
-    secondPrivateKey = BigInt(poseidonHash(ethers.hexlify(ethers.randomBytes(32)))) >> 3n;
+    privateKey = BigInt(poseidonHash("0xbade288099ca7c293346a3e88606384b3f1c875ad76d9313840f35c49723554c")) >> 3n;
+    secondPrivateKey = BigInt(poseidonHash("0xbade288099ca7c293346a3e88606384b3f1c875ad76d9313840f35c49723554f")) >> 3n;
 
     accountNullifier = buildNullifier(privateKey, EVENT_ID);
     secondNullifier = buildNullifier(secondPrivateKey, EVENT_ID);

@@ -86,7 +86,7 @@ const config: HardhatUserConfig = {
     ],
   },
   migrate: {
-    pathToMigrations: "./deploy/",
+    pathToMigrations: "./deploy-local",
   },
   mocha: {
     timeout: 1000000,

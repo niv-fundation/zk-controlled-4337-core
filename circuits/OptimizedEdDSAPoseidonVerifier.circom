@@ -43,9 +43,6 @@ template OptimizedEdDSAPoseidonVerifier() {
     component h2bits = Num2Bits_strict();
     h2bits.in <== hash.out;
 
-    component b2Num = Bits2Num_strict();
-    h2bits.out ==> b2Num.in;
-
     // Calculate second part of the right side: right2 = h * A
     component mulAny = EscalarMulAny(254);
     for (var i = 0; i < 254; i++) {

@@ -37,12 +37,6 @@ export function buildNullifier(pk: bigint, eventID: bigint): string {
   );
 }
 
-export function getPublicFromPrivateKey(privateKay: string) {
-  let s = BigInt(privateKay);
-
-  return babyJub.mulPointEscalar(babyJub.Base8, s);
-}
-
 export function signRawPoseidon(privateKay: bigint, hash: string) {
   const publicKey = babyJub.mulPointEscalar(babyJub.Base8, privateKay);
 
@@ -58,6 +52,12 @@ export function signRawPoseidon(privateKay: bigint, hash: string) {
     R8: R8,
     S: S,
   };
+}
+
+export function getPublicFromPrivateKey(privateKay: string) {
+  let s = BigInt(privateKay);
+
+  return babyJub.mulPointEscalar(babyJub.Base8, s);
 }
 
 export function verifySignature(
