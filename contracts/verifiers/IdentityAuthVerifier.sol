@@ -74,7 +74,7 @@ contract IdentityAuthVerifier {
                 mstore(add(pointer_, 32), y_)
                 mstore(add(pointer_, 64), s_)
 
-                res_ := staticcall(sub(gas(), 2000), 7, pointer_, 96, pointer_, 64) // ecMul
+                res_ := staticcall(1000000, 7, pointer_, 96, pointer_, 64) // ecMul
                 res_ := and(res_, gt(returndatasize(), 0)) // check that multiplication succeeded
 
                 if iszero(res_) {
@@ -84,7 +84,7 @@ contract IdentityAuthVerifier {
                 mstore(add(pointer_, 64), mload(pR_))
                 mstore(add(pointer_, 96), mload(add(pR_, 32)))
 
-                res_ := staticcall(sub(gas(), 2000), 6, pointer_, 128, pR_, 64) // ecAdd
+                res_ := staticcall(1000000, 6, pointer_, 128, pR_, 64) // ecAdd
                 res_ := and(res_, gt(returndatasize(), 0)) // check that addition succeeded
             }
 
@@ -145,7 +145,7 @@ contract IdentityAuthVerifier {
                 mstore(add(pPairing_, 704), DELTA_Y1)
                 mstore(add(pPairing_, 736), DELTA_Y2)
 
-                res_ := staticcall(sub(gas(), 2000), 8, pPairing_, 768, pPairing_, 32) // ecPairing
+                res_ := staticcall(1000000, 8, pPairing_, 768, pPairing_, 32) // ecPairing
                 res_ := and(res_, mload(pPairing_)) // check that pairing succeeded
             }
 

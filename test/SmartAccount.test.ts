@@ -6,7 +6,7 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { Reverter } from "@test-helpers";
 import { deployAA, deployEntryPoint } from "@deployment";
 
-import { EntryPoint, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
+import { EntryPoint, Paymaster, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
 import {
   executeViaEntryPoint,
   getDefaultPackedUserOperation,
@@ -33,6 +33,7 @@ describe("SmartAccount", () => {
   let accountFactory: SmartAccountFactory;
 
   let account: SmartAccount;
+  let paymaster: Paymaster;
 
   let identityAuth: IdentityAuth;
 
@@ -59,7 +60,13 @@ describe("SmartAccount", () => {
     await accountFactory.deploySmartAccount(accountNullifier);
     account = await ethers.getContractAt("SmartAccount", await accountFactory.getSmartAccount(accountNullifier));
 
+    const Paymaster = await ethers.getContractFactory("Paymaster");
+    paymaster = await Paymaster.deploy(await entryPoint.getAddress());
+
     await setBalance(await account.getAddress(), ethers.parseEther("20"));
+    await setBalance(await paymaster.getAddress(), ethers.parseEther("20"));
+
+    await paymaster.deposit({ value: ethers.parseEther("20") });
 
     await reverter.snapshot();
   });
@@ -122,6 +129,7 @@ describe("SmartAccount", () => {
       await executeViaEntryPoint(
         entryPoint,
         account,
+        paymaster,
         privateKey,
         EVENT_ID,
         await accountFactory.getAddress(),
@@ -172,6 +180,7 @@ describe("SmartAccount", () => {
         executeViaEntryPoint(
           entryPoint,
           account,
+          paymaster,
           secondPrivateKey,
           EVENT_ID,
           await accountFactory.getAddress(),
@@ -215,7 +224,7 @@ describe("SmartAccount", () => {
     });
 
     it("should revert if nonce is not valid", async () => {
-      const nonSignedOp = await getDefaultPackedUserOperation(account);
+      const nonSignedOp = await getDefaultPackedUserOperation(account, paymaster);
       nonSignedOp.nonce = ethers.MaxUint256 - 2n;
       const signedOp = await getSignedPackedUserOperation(entryPoint, privateKey, EVENT_ID, nonSignedOp);
 
@@ -225,7 +234,7 @@ describe("SmartAccount", () => {
     });
 
     it("should revert if trying to validate User Operation not from entrypoint", async () => {
-      const nonSignedOp = await getDefaultPackedUserOperation(account);
+      const nonSignedOp = await getDefaultPackedUserOperation(account, paymaster);
 
       await expect(account.validateUserOp(nonSignedOp, ethers.ZeroHash, 0n))
         .to.be.revertedWithCustomError(account, "NotFromEntryPoint")
@@ -237,7 +246,7 @@ describe("SmartAccount", () => {
       const entryPointAsSigner = await ethers.provider.getSigner(await entryPoint.getAddress());
       await setBalance(await entryPoint.getAddress(), ethers.parseEther("20"));
 
-      const nonSignedOp = await getDefaultPackedUserOperation(account);
+      const nonSignedOp = await getDefaultPackedUserOperation(account, paymaster);
       const signedOp = await getSignedPackedUserOperation(entryPoint, privateKey, EVENT_ID, nonSignedOp);
       const hashOp = await entryPoint.getUserOpHash(signedOp);
 

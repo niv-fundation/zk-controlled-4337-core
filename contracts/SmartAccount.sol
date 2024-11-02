@@ -155,6 +155,10 @@ contract SmartAccount is IAccount, Initializable, UUPSUpgradeable, ERC1155Holder
         }
     }
 
+    function getTransactionHistoryLength() external view returns (uint256) {
+        return history.length;
+    }
+
     function _validateSignature(
         PackedUserOperation calldata userOp,
         bytes32 userOpHash

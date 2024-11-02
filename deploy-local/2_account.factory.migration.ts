@@ -4,9 +4,11 @@ import {
   EntryPoint__factory,
   ERC1967Proxy__factory,
   IdentityAuthVerifier__factory,
+  Paymaster__factory,
   SmartAccount__factory,
   SmartAccountFactory__factory,
 } from "@ethers-v6";
+import { ethers } from "ethers";
 
 export = async (deployer: Deployer) => {
   const entryPoint = await deployer.deployed(EntryPoint__factory);
@@ -26,5 +28,13 @@ export = async (deployer: Deployer) => {
 
   await accountFactory.__SmartAccountFactory_init(await accountImplementation.getAddress());
 
-  Reporter.reportContracts(["SmartAccountFactory", await accountFactory.getAddress()]);
+  let paymaster = await deployer.deploy(Paymaster__factory, [await entryPoint.getAddress()]);
+
+  await paymaster.deposit({ value: ethers.parseEther("2") });
+
+  Reporter.reportContracts(
+    ["SmartAccountFactory", await accountFactory.getAddress()],
+    ["EntryPoint", await entryPoint.getAddress()],
+    ["Paymaster", await paymaster.getAddress()],
+  );
 };

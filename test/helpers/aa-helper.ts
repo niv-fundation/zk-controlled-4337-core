@@ -4,7 +4,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { encodeIdentityProof, signRawPoseidon } from "@scripts";
 
-import { EntryPoint, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
+import { EntryPoint, Paymaster, SmartAccount, SmartAccount__factory, SmartAccountFactory } from "@ethers-v6";
 import { PackedUserOperationStruct } from "@/generated-types/ethers/@account-abstraction/contracts/core/EntryPoint";
 
 export async function getSignature(signerPk: bigint, eventId: bigint, messageHash: string) {
@@ -37,6 +37,7 @@ export async function getSignature(signerPk: bigint, eventId: bigint, messageHas
 export async function executeViaEntryPoint(
   entryPoint: EntryPoint,
   account: SmartAccount,
+  paymaster: Paymaster,
   signerPk: bigint,
   eventId: bigint,
   destination: string,
@@ -47,7 +48,7 @@ export async function executeViaEntryPoint(
     await setBalance(await account.getAddress(), ethers.parseEther("20"));
   }
 
-  const userOp = await getDefaultPackedUserOperation(account);
+  const userOp = await getDefaultPackedUserOperation(account, paymaster);
   userOp.callData = SmartAccount__factory.createInterface().encodeFunctionData("execute(address,uint256,bytes)", [
     destination,
     value,
@@ -90,13 +91,21 @@ export async function getEmptyPackedUserOperation() {
   };
 }
 
-export async function getDefaultPackedUserOperation(account: SmartAccount) {
+export async function getDefaultPackedUserOperation(account: SmartAccount, paymaster: Paymaster) {
   const emptyUserOp = await getEmptyPackedUserOperation();
 
   emptyUserOp.sender = await account.getAddress();
   emptyUserOp.nonce = await account.getCurrentNonce();
+  emptyUserOp.paymasterAndData = getPaymasterAndData(await paymaster.getAddress());
 
   return emptyUserOp;
+}
+
+export function getPaymasterAndData(paymaster: string): string {
+  return (
+    ethers.zeroPadBytes(paymaster + ethers.toBeHex("0x10000", 16).slice(2, 32), 36) +
+    ethers.zeroPadValue("0x1000", 16).slice(2)
+  );
 }
 
 export async function getSignedPackedUserOperation(
