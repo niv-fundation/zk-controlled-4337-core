@@ -10,10 +10,14 @@ import {TypeCaster} from "@solarity/solidity-lib/libs/utils/TypeCaster.sol";
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
+import {IEntryPoint} from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
+
 import {SmartAccount} from "./SmartAccount.sol";
 
 contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
     using TypeCaster for *;
+
+    IEntryPoint public immutable ENTRY_POINT;
 
     mapping(bytes32 => address) public smartAccounts;
 
@@ -21,7 +25,9 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
 
     event SmartAccountDeployed(address indexed account);
 
-    constructor() {
+    constructor(address entryPoint_) {
+        ENTRY_POINT = IEntryPoint(entryPoint_);
+
         _disableInitializers();
     }
 
@@ -63,6 +69,55 @@ contract SmartAccountFactory is OwnableUpgradeable, UUPSUpgradeable {
      */
     function predictSmartAccountAddress(bytes32 nullifier_) external view returns (address) {
         return _predictAddress(_smartAccountImplementation, nullifier_);
+    }
+
+    /**
+     * Add a deposit for this paymaster, used for paying for transaction fees.
+     */
+    function deposit() public payable {
+        ENTRY_POINT.depositTo{value: msg.value}(address(this));
+    }
+
+    /**
+     * Withdraw value from the deposit.
+     * @param withdrawAddress - Target to send to.
+     * @param amount          - Amount to withdraw.
+     */
+    function withdrawTo(address payable withdrawAddress, uint256 amount) public onlyOwner {
+        ENTRY_POINT.withdrawTo(withdrawAddress, amount);
+    }
+
+    /**
+     * Add stake for this paymaster.
+     * This method can also carry eth value to add to the current stake.
+     * @param unstakeDelaySec - The unstake delay for this paymaster. Can only be increased.
+     */
+    function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
+        ENTRY_POINT.addStake{value: msg.value}(unstakeDelaySec);
+    }
+
+    /**
+     * Return current paymaster's deposit on the entry point.
+     */
+    function getDeposit() public view returns (uint256) {
+        return ENTRY_POINT.balanceOf(address(this));
+    }
+
+    /**
+     * Unlock the stake, in order to withdraw it.
+     * The paymaster can't serve requests once unlocked, until it calls addStake again
+     */
+    function unlockStake() external onlyOwner {
+        ENTRY_POINT.unlockStake();
+    }
+
+    /**
+     * Withdraw the entire paymaster's stake.
+     * stake must be unlocked first (and then wait for the unstakeDelay to be over)
+     * @param withdrawAddress - The address to send withdrawn value.
+     */
+    function withdrawStake(address payable withdrawAddress) external onlyOwner {
+        ENTRY_POINT.withdrawStake(withdrawAddress);
     }
 
     /**

@@ -13,7 +13,7 @@ import { ethers } from "ethers";
 export = async (deployer: Deployer) => {
   const entryPoint = await deployer.deployed(EntryPoint__factory);
 
-  let accountFactory = await deployer.deploy(SmartAccountFactory__factory);
+  let accountFactory = await deployer.deploy(SmartAccountFactory__factory, [await entryPoint.getAddress()]);
   const proxy = await deployer.deploy(ERC1967Proxy__factory, [await accountFactory.getAddress(), "0x"], {
     name: "SmartAccountFactoryProxy",
   });
