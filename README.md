@@ -31,7 +31,7 @@ To learn more about existing solutions, read the [Existing solutions](#existing-
 This project will be separated into two repositories:
 
 - This repository will contain contracts and circuits.
-- [TBD]() - Here you will find a mobile client to use the implemented AA.
+- [Android App](https://github.com/niv-fundation/zk-controlled-android-app) - Here you will find a mobile client to use the implemented AA.
 
 ### Objectives
 
@@ -42,8 +42,6 @@ We decided to include native compatibility with the [Rarime](https://rarime.com/
 In this project, we will use:
 1. A keypair on the [BabyJubJub curve](https://eips.ethereum.org/EIPS/eip-2494) as the controlling source and regular Ethereum keys as session keys.
 2. ZKPs to prove the connection between the main keypair and session keys.
-
-### Implementation (TBD)
 
 ##  Existing solutions
 
